@@ -1,5 +1,3 @@
-# main.py
-
 import os
 import re
 import asyncio
@@ -7,58 +5,51 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from yt_dlp import YoutubeDL
 
-API_ID = int(os.getenv("API_ID", 123456))  # Replace in .env or Heroku config
-API_HASH = os.getenv("API_HASH", "your_api_hash")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token")
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-bot = Client("yt-dl-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("yt-dlp-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-
-def clean_url(url):
-    if "youtube.com/embed/" in url:
-        return url.replace("embed/", "watch?v=")
+def clean_url(url: str) -> str:
+    # Convert embed to watch URL if needed
+    embed_match = re.search(r"youtube\.com/embed/([a-zA-Z0-9_-]+)", url)
+    if embed_match:
+        video_id = embed_match.group(1)
+        return f"https://www.youtube.com/watch?v={video_id}"
     return url
 
-
-def download_video(url, output_path="downloads/video.%(ext)s"):
+def download_video(url: str, file_path: str) -> str:
     ydl_opts = {
-        "format": "best[ext=mp4][vcodec^=avc1]/best",
-        "outtmpl": output_path,
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "merge_output_format": "mp4",
+        'format': 'bv*+ba/best',
+        'outtmpl': file_path,
+        'merge_output_format': 'mkv',
+        'noplaylist': True,
+        'quiet': True,
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mkv',
+        }],
     }
-
     with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        return ydl.prepare_filename(info)
+        ydl.download([url])
+    return file_path
 
+@app.on_message(filters.command("start"))
+async def start(client, message: Message):
+    await message.reply_text("Send me a YouTube URL (even embed one), and I’ll send back the MKV video.")
 
-@bot.on_message(filters.command("start"))
-async def start_cmd(_, m: Message):
-    await m.reply("👋 Send me a YouTube video link to download (even embed URLs supported).")
-
-
-@bot.on_message(filters.text & filters.private)
-async def download_handler(_, m: Message):
-    url = m.text.strip()
-
-    if not re.match(r"^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/", url):
-        await m.reply("❌ Invalid YouTube link.")
-        return
-
-    await m.reply("🔄 Processing your video...")
+@app.on_message(filters.text & filters.private)
+async def download_handler(client, message: Message):
+    url = clean_url(message.text.strip())
+    await message.reply("🔄 Downloading... please wait.")
 
     try:
-        real_url = clean_url(url)
-        path = download_video(real_url)
-        await m.reply_video(video=path, caption="✅ Here's your video", supports_streaming=True)
+        file_name = "downloaded.mkv"
+        download_video(url, file_name)
+        await message.reply_video(file_name, caption="✅ Done!", supports_streaming=True)
+        os.remove(file_name)
     except Exception as e:
-        await m.reply(f"❌ Failed to download: `{e}`")
+        await message.reply(f"❌ Error: {e}")
 
-
-if __name__ == "__main__":
-    if not os.path.exists("downloads"):
-        os.mkdir("downloads")
-    bot.run()
+app.run()
