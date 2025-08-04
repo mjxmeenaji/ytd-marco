@@ -1,0 +1,22 @@
+{
+  "name": "YouTube Stream Bot",
+  "description": "Telegram bot to download and stream YouTube videos",
+  "repository": "https://github.com/mjxmeenaji/ytd-marco",
+  "keywords": ["telegram", "bot", "youtube", "stream"],
+  "env": {
+    "API_ID": {
+      "description": "Get this from https://my.telegram.org"
+    },
+    "API_HASH": {
+      "description": "Get this from https://my.telegram.org"
+    },
+    "BOT_TOKEN": {
+      "description": "Your bot token from @BotFather"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
